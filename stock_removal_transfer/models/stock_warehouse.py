@@ -67,11 +67,71 @@ class StockWarehouse(models.Model):
     def _run_scheduler_removal_date_transfers(self):
         """Scheduled action to process removal date transfers."""
         self._process_removal_date_transfers()
+
+    def test_removal_date_transfer(self):
+        """Test method to verify removal date transfer functionality."""
+        self.ensure_one()
+        self.removal_date_transfer = True
+        
+        # Create a test product with lot tracking
+        product = self.env['product.product'].create({
+            'name': 'Test Product',
+            'type': 'product',
+            'tracking': 'lot',
+        })
+        
+        # Create a lot with today's removal date
+        lot = self.env['stock.lot'].create({
+            'name': 'TEST/LOT/001',
+            'product_id': product.id,
+            'company_id': self.company_id.id,
+            'removal_date': fields.Datetime.now(),
+        })
+        
+        # Add stock for this lot
+        self.env['stock.quant'].create({
+            'product_id': product.id,
+            'location_id': self.lot_stock_id.id,
+            'quantity': 10.0,
+            'lot_id': lot.id,
+        })
+        
+        # Process removal date transfers
+        self._process_removal_date_transfers()
+        
+        # Verify transfer was created
+        picking = self.env['stock.picking'].search([
+            ('origin', '=', f'Removal Date Transfer - {lot.name}'),
+            ('picking_type_id', '=', self.int_type_id.id)
+        ])
+        
+        if picking:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Test Successful',
+                    'message': f'Transfer {picking.name} created successfully for lot {lot.name}',
+                    'type': 'success',
+                }
+            }
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Test Failed',
+                'message': 'No transfer was created',
+                'type': 'danger',
+            }
+        }
         
 
 class StockLot(models.Model):
     _inherit = 'stock.lot'
 
-    removal_date = fields.Date(string='Removal Date')
-    best_before = fields.Date(string='Best Before Date')
-    alert_date = fields.Date(string='Alert Date')
+    use_date = fields.Datetime(string='Best before Date', store=True, readonly=False,
+        help='This is the date on which the goods with this Serial Number start deteriorating, without being dangerous yet.')
+    removal_date = fields.Datetime(string='Removal Date', readonly=False,
+        help='This is the date on which the goods with this Serial Number should be removed from the stock. This date will be used in stock removal transfer strategy.')
+    alert_date = fields.Datetime(string='Alert Date', readonly=False,
+        help='Date to determine the expired lots and serial numbers using the filter "Expiration Alerts".')

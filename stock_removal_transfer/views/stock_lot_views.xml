@@ -9,7 +9,7 @@
                 <page string="Dates" name="dates">
                     <group>
                         <group>
-                            <field name="best_before"/>
+                            <field name="use_date"/>
                             <field name="removal_date"/>
                         </group>
                         <group>
