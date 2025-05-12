@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='qc_type_id']" position="before">
                 <field name="removal_date_transfer"/>
+                <field name="removal_transfer_type_id" invisible="not removal_date_transfer" required="removal_date_transfer"/>
             </xpath>
         </field>
     </record>

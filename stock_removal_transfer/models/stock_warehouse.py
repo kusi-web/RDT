@@ -9,6 +9,11 @@ class StockWarehouse(models.Model):
         string='Removal Date Transfers',
         help='If enabled, the system will automatically create transfers for lots that have reached their removal date'
     )
+    removal_transfer_type_id = fields.Many2one(
+        'stock.picking.type',
+        string='Transfer Operation Type',
+        help='Operation type to use for removal date transfers'
+    )
 
     def _process_removal_date_transfers(self):
         """Process removal date transfers for warehouses where removal_date_transfer is enabled."""
@@ -16,6 +21,9 @@ class StockWarehouse(models.Model):
         warehouses = self.search([('removal_date_transfer', '=', True)])
         
         for warehouse in warehouses:
+            if not warehouse.removal_transfer_type_id:
+                continue
+
             lots = self.env['stock.lot'].search([
                 ('removal_date', '<=', today),
                 ('quant_ids.location_id', 'child_of', warehouse.lot_stock_id.id),
@@ -41,11 +49,12 @@ class StockWarehouse(models.Model):
                             strict=False
                         )
                 
-                # Create internal transfer
+                # Create transfer using selected operation type
+                picking_type = warehouse.removal_transfer_type_id
                 picking = self.env['stock.picking'].create({
-                    'picking_type_id': warehouse.int_type_id.id,
-                    'location_id': warehouse.lot_stock_id.id,
-                    'location_dest_id': warehouse.wh_output_stock_loc_id.id,
+                    'picking_type_id': picking_type.id,
+                    'location_id': picking_type.default_location_src_id.id or warehouse.lot_stock_id.id,
+                    'location_dest_id': picking_type.default_location_dest_id.id or warehouse.wh_output_stock_loc_id.id,
                     'origin': f'Removal Date Transfer - {lot.name}',
                     'scheduled_date': fields.Datetime.now(),
                 })
@@ -56,8 +65,8 @@ class StockWarehouse(models.Model):
                     'product_id': lot.product_id.id,
                     'product_uom_qty': sum(quants.mapped('quantity')),
                     'product_uom': lot.product_id.uom_id.id,
-                    'location_id': warehouse.lot_stock_id.id,
-                    'location_dest_id': warehouse.wh_output_stock_loc_id.id,
+                    'location_id': picking.location_id.id,
+                    'location_dest_id': picking.location_dest_id.id,
                     'lot_ids': [(4, lot.id)],
                 })
                 
